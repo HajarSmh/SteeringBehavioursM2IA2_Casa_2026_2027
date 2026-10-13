@@ -1,0 +1,323 @@
+// Trois serpents qui suivent la souris.
+// SnakeHead (le leader) étend Vehicle : forces (arrive + ondulation) -> update().
+// Snake étend Vehicle aussi : sa position EST celle de la tête, et son corps est
+// une chaîne de points collés (distance fixe) qui suivent chacun le précédent.
+
+// Largeur (diamètre du cou) et longueur (nombre de points) différentes pour chacun.
+const SNAKE_SPECS = [
+  { name: 'Fil',    count: 40, width: 12, maxSpeed: 6.5, maxForce: 0.32, hue: 135, orbit: 50,  orbitSpeed: 1.1 },
+  { name: 'Moyen',  count: 26, width: 22, maxSpeed: 5,   maxForce: 0.22, hue: 305, orbit: 110, orbitSpeed: -0.7 },
+  { name: 'Gros',   count: 14, width: 34, maxSpeed: 3.6, maxForce: 0.15, hue: 38,  orbit: 170, orbitSpeed: 0.5 }
+];
+
+class SnakeHead extends Vehicle {
+  constructor(x, y, { radius, maxSpeed, maxForce, hue }) {
+    super(x, y);
+    this.r = radius;
+    this.maxSpeed = maxSpeed;
+    this.maxForce = maxForce;
+    this.hue = hue;
+    this.angle = Math.random() * Math.PI * 2;            // cap affiché (lissé)
+    this.vel = p5.Vector.fromAngle(this.angle).setMag(maxSpeed * 0.5);
+    this.prevVel = this.vel.copy();
+    this.slowRadius = radius * 7;                        // zone de ralentissement (arrive)
+    this.phase = Math.random() * Math.PI * 2;            // déphasage propre à chaque serpent
+    this.look = createVector(1, 0);                      // direction du regard (repère de la tête)
+    this.excite = 0;                                     // 0..1 : souris proche => yeux écarquillés
+    this.blink = 0;
+    this.nextBlink = 90;
+    this.pupil = [createVector(0, 0), createVector(0, 0)];
+    this.pupilVel = [createVector(0, 0), createVector(0, 0)];
+  }
+
+  // Arrive : comme seek, mais on ralentit près de la cible (pas de tremblement).
+  arrive(target) {
+    const desired = p5.Vector.sub(target, this.pos);
+    const d = desired.mag();
+    let speed = this.maxSpeed;
+    if (d < this.slowRadius) speed = (d / this.slowRadius) * this.maxSpeed;
+    desired.setMag(speed);
+    return p5.Vector.sub(desired, this.vel).limit(this.maxForce);
+  }
+
+  // Forces + regard. lookAt = position réelle de la souris (ou null).
+  steer(target, lookAt, t) {
+    this.applyForce(this.arrive(target));
+
+    // ondulation : petite force perpendiculaire sinusoïdale => il serpente
+    const speed = this.vel.mag();
+    if (speed > 0.01) {
+      const perp = createVector(-this.vel.y, this.vel.x).setMag(1);
+      const k = Math.sin(t * 7 + this.phase) * this.maxForce * 0.9 * Math.min(1, speed / this.maxSpeed);
+      this.applyForce(perp.mult(k));
+    }
+
+    const toLook = lookAt ? p5.Vector.sub(lookAt, this.pos) : this.vel.copy();
+    const dist = lookAt ? toLook.mag() : Infinity;
+    if (toLook.magSq() > 0.0001) this.look = toLook.rotate(-this.angle).setMag(1);
+    this.excite += ((dist < 180 ? 1 : 0) - this.excite) * 0.1;
+  }
+
+  update() {
+    this.prevVel.set(this.vel);
+    super.update();
+    if (this.vel.magSq() > 0.04) {                    // cap lissé, évite les sursauts
+      const diff = Math.atan2(Math.sin(this.vel.heading() - this.angle),
+                            Math.cos(this.vel.heading() - this.angle));
+      this.angle += diff * 0.25;
+    }
+    this.updateEyes();
+  }
+
+  eyeRadius() {
+    return this.r * 0.42 * (1 + 0.45 * this.excite);
+  }
+
+  // Yeux "googly" : les pupilles sont des ressorts qui ballottent quand la tête accélère.
+  updateEyes() {
+    const accel = p5.Vector.sub(this.vel, this.prevVel).rotate(-this.angle);
+    const er = this.eyeRadius();
+    const room = er - er * 0.5;
+    for (let i = 0; i < 2; i++) {
+      const p = this.pupil[i];
+      const v = this.pupilVel[i];
+      const goal = this.look.copy().mult(room);
+      v.add(p5.Vector.sub(goal, p).mult(i === 0 ? 0.09 : 0.14));   // chaque oeil a son caractère
+      v.add(-accel.x * 2, -accel.y * 2);                          // inertie rigolote
+      v.add((Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.15);
+      v.mult(0.82);
+      p.add(v);
+      if (p.mag() > room) { p.setMag(room); v.mult(-0.5); }        // rebond contre le bord de l'oeil
+    }
+    this.nextBlink -= 1;
+    if (this.nextBlink <= 0) {
+      this.blink = 1;
+      this.nextBlink = 90 + Math.floor(Math.random() * 150);
+    }
+    this.blink = Math.max(0, this.blink - 0.12);
+  }
+
+  // Langue fourchue : elle sort par à-coups, remue, et sort plus quand la souris est proche.
+  drawTongue() {
+    const f = frameCount * 0.1 + this.phase;
+    const flick = Math.pow(Math.max(0, Math.sin(f)), 2);
+    const len = this.r * (0.6 + 1.6 * flick + 0.8 * this.excite);
+    const sway = Math.sin(frameCount * 0.9 + this.phase) * this.r * 0.25 * (0.4 + flick);
+    const x0 = this.r * 1.0;
+    const xe = x0 + len * 0.7;
+    const ye = sway * 0.6;
+    const fork = this.r * 0.28;
+    noFill();
+    stroke(350, 85, 95);
+    strokeWeight(Math.max(2, this.r * 0.16));
+    strokeCap(ROUND);
+    line(x0, 0, xe, ye);
+    line(xe, ye, x0 + len, sway + fork);
+    line(xe, ye, x0 + len, sway - fork);
+  }
+
+  show() {
+    push();
+    colorMode(HSB, 360, 100, 100, 1);
+    translate(this.pos.x, this.pos.y);
+    rotate(this.angle);
+
+    this.drawTongue();
+
+    // tête
+    stroke(this.hue, 70, 25);
+    strokeWeight(2);
+    fill(this.hue, 70, 88);
+    ellipse(0, 0, this.r * 2.3, this.r * 1.9);
+
+    // narines
+    noStroke();
+    fill(this.hue, 70, 25);
+    circle(this.r * 0.85, -this.r * 0.25, this.r * 0.14);
+    circle(this.r * 0.85, this.r * 0.25, this.r * 0.14);
+
+    // yeux + pupilles
+    const er = this.eyeRadius();
+    for (let i = 0; i < 2; i++) {
+      const ex = this.r * 0.3;
+      const ey = (i === 0 ? -1 : 1) * this.r * 0.5;
+      const squash = 1 - 0.9 * this.blink;
+      stroke(this.hue, 70, 25);
+      strokeWeight(1.5);
+      fill(0, 0, 100);
+      ellipse(ex, ey, er * 2, er * 2 * squash);
+      if (squash > 0.25) {
+        noStroke();
+        fill(0, 0, 5);
+        circle(ex + this.pupil[i].x, ey + this.pupil[i].y * squash, er);
+      }
+    }
+    pop();
+  }
+}
+
+class Poop {
+  constructor(x, y, dir, { size }) {
+    this.pos = createVector(x, y);
+    this.vel = dir.copy();
+    this.size = size;
+    this.life = 4.0; // Durée de vie en secondes
+    this.done = false;
+  }
+
+  advance(dt) {
+    this.life -= dt;
+    if (this.life <= 0) {
+      this.done = true;
+    }
+  }
+
+  update() {
+    this.pos.add(this.vel);
+    this.vel.mult(0.92); // Glissement progressif (ralentissement)
+  }
+
+  show() {
+    push();
+    colorMode(HSB, 360, 100, 100, 1);
+    noStroke();
+    const alpha = constrain(this.life / 1.0, 0, 1);
+    fill(25, 65, 35, alpha); // Couleur terre / marron
+    ellipse(this.pos.x, this.pos.y, this.size, this.size * 0.75);
+    pop();
+  }
+}
+
+class Snake extends Vehicle {
+  constructor(x, y, spec, index = 0) {
+    super(x, y);
+    this.spec = spec;
+    this.index = index;
+    this.width = spec.width;
+    this.hue = spec.hue;
+    this.spacingRatio = 0.55;                           // écart = largeur * ratio
+    this.spacing = this.width * this.spacingRatio;     // distance fixe entre deux points
+    this.lengthScale = 1;                              // multiplicateur du nombre de points
+    this.digesting = [];                               // minuteurs avant d'éjecter une crotte
+    this.head = new SnakeHead(x, y, {
+      radius: spec.width * 0.65,
+      maxSpeed: spec.maxSpeed,
+      maxForce: spec.maxForce,
+      hue: spec.hue
+    });
+    // le serpent EST sa tête (mêmes vecteurs)
+    this.pos = this.head.pos;
+    this.vel = this.head.vel;
+    this.acc = this.head.acc;
+
+    const back = p5.Vector.fromAngle(this.head.angle + Math.PI);
+    this.segments = [];
+    for (let i = 0; i < spec.count; i++) {
+      this.segments.push(back.copy().mult(this.spacing * (i + 1)).add(this.head.pos));
+    }
+  }
+
+  // Curseur "écart" : distance entre deux points
+  setSpacingRatio(r) {
+    this.spacingRatio = r;
+    this.spacing = this.width * r;
+  }
+
+  // Curseur "longueur" : multiplie le nombre de points de base (spec.count)
+  setLengthScale(k) {
+    this.lengthScale = k;
+    const n = Math.max(3, Math.round(this.spec.count * k));
+    while (this.segments.length < n) {
+      this.segments.push(this.segments[this.segments.length - 1].copy());
+    }
+    while (this.segments.length > n) this.segments.pop();
+  }
+
+  // Appelé quand un fruit est mangé : la crotte sortira après la digestion
+  eat() {
+    this.digesting.push(0.9);                           // secondes
+  }
+
+  // Renvoie les crottes à éjecter ce frame (depuis le DERNIER point)
+  updateDigestion(dt) {
+    const out = [];
+    for (let i = this.digesting.length - 1; i >= 0; i--) {
+      this.digesting[i] -= dt;
+      if (this.digesting[i] <= 0) {
+        this.digesting.splice(i, 1);
+        const last = this.segments[this.segments.length - 1];
+        const prev = this.segments.length > 1
+          ? this.segments[this.segments.length - 2]
+          : this.head.pos;
+        const dir = p5.Vector.sub(last, prev);         // direction de la queue, vers l'arrière
+        if (dir.magSq() < 1e-6) dir.set(-1, 0);
+        dir.setMag(4);
+        out.push(new Poop(last.x, last.y, dir, { size: Math.max(6, this.width * 0.45) }));
+      }
+    }
+    return out;
+  }
+
+  // Diamètre du corps au point i : épais au cou, fin à la queue.
+  widthAt(i) {
+    const t = this.segments.length > 1 ? i / (this.segments.length - 1) : 0;
+    return this.width * (1 - 0.85 * Math.pow(t, 1.3));
+  }
+
+  // Cible : autour de la souris (chaque serpent sur sa propre orbite) ou, sans souris,
+  // une balade en courbe de Lissajous.
+  follow(mousePos, t, w, h) {
+    let target;
+    let lookAt = null;
+    if (mousePos) {
+      const a = t * this.spec.orbitSpeed + (this.index * Math.PI * 2) / 3;
+      target = createVector(
+        mousePos.x + Math.cos(a) * this.spec.orbit,
+        mousePos.y + Math.sin(a) * this.spec.orbit
+      );
+      lookAt = mousePos;
+    } else {
+      target = createVector(
+        w / 2 + Math.cos(t * 0.35 + this.index * 2.1) * w * 0.38,
+        h / 2 + Math.sin(t * 0.47 + this.index * 1.3) * h * 0.36
+      );
+    }
+    this.head.steer(target, lookAt, t);
+    this.head.update();
+    this.head.pos.set(constrain(this.head.pos.x, 0, w), constrain(this.head.pos.y, 0, h));
+    this.pull();
+  }
+
+  // Chaque point reste collé au précédent à distance exacte.
+  pull() {
+    let prev = this.head.pos;
+    for (const seg of this.segments) {
+      const d = p5.Vector.sub(seg, prev);
+      if (d.magSq() < 1e-6) d.set(-1, 0);
+      d.setMag(this.spacing);
+      seg.set(prev.x + d.x, prev.y + d.y);
+      prev = seg;
+    }
+  }
+
+  show() {
+    push();
+    colorMode(HSB, 360, 100, 100, 1);
+    for (let i = this.segments.length - 1; i >= 0; i--) {   // de la queue vers la tête
+      const s = this.segments[i];
+      const w = this.widthAt(i);
+      const bright = Math.floor(i / 3) % 2 ? 78 : 95;       // bandes alternées
+      stroke(this.hue, 80, 25);
+      strokeWeight(2);
+      fill((this.hue + Math.sin(i * 0.4) * 15 + 360) % 360, 75, bright);
+      circle(s.x, s.y, w);
+      noStroke();
+      fill(this.hue, 25, 100, 0.45);                        // reflet
+      circle(s.x - w * 0.1, s.y - w * 0.15, w * 0.3);
+    }
+    pop();
+    this.head.show();
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = { Snake, SnakeHead, SNAKE_SPECS, Poop };

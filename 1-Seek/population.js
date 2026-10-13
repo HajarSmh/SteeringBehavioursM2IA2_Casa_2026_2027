@@ -1,90 +1,99 @@
-// Gestion de scène : aucun calcul de steering ou de locomotion ici.
+// Règles de gestion de la population (sans dépendance à p5, donc testable).
 const SeekPopulation = (() => {
   const MIN_COUNT = 1;
   const MAX_COUNT = 200;
   const INITIAL_COUNT = 20;
-  const ARRIVAL_RADIUS = 16;
-  const SPAWN_DISTANCE = ARRIVAL_RADIUS + 4;
+  const ARRIVAL_RADIUS = 16;   // le centre du véhicule dans le disque = arrivée
+  const SAFE_DISTANCE = 20;    // une réapparition doit être > 20 px de la cible
+  const MAX_TRIES = 32;
+  const MARGIN = 16;
 
-  function distanceSquared(a, b) {
-    return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+  function clampCount(value) {
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n)) return MIN_COUNT;
+    return Math.min(MAX_COUNT, Math.max(MIN_COUNT, n));
   }
 
-  function hasArrived(vehicle, target) {
-    return distanceSquared(vehicle.pos, target) <= ARRIVAL_RADIUS ** 2;
+  function hasArrived(pos, targetPos) {
+    const dx = pos.x - targetPos.x;
+    const dy = pos.y - targetPos.y;
+    return dx * dx + dy * dy <= ARRIVAL_RADIUS * ARRIVAL_RADIUS;
   }
 
-  // null signifie qu'aucune position ne respecte la zone d'exclusion.
-  function spawnPosition(target, w, h, radius, rng = Math.random) {
-    const marginX = w >= radius * 2 ? radius : 0;
-    const marginY = h >= radius * 2 ? radius : 0;
-    const bounds = { left: marginX, right: w - marginX, top: marginY, bottom: h - marginY };
-    for (let attempt = 0; attempt < 32; attempt++) {
-      const point = {
-        x: bounds.left + rng() * (bounds.right - bounds.left),
-        y: bounds.top + rng() * (bounds.bottom - bounds.top),
-      };
-      if (distanceSquared(point, target) > SPAWN_DISTANCE ** 2) return point;
+  // Tirage borné : 32 essais aléatoires, puis repli sur le coin le plus éloigné.
+  function pickPosition(w, h, targetPos, rng = Math.random) {
+    const mx = w > 2 * MARGIN ? MARGIN : 0;
+    const my = h > 2 * MARGIN ? MARGIN : 0;
+    const isSafe = p => Math.hypot(p.x - targetPos.x, p.y - targetPos.y) > SAFE_DISTANCE;
+    for (let i = 0; i < MAX_TRIES; i++) {
+      const p = { x: mx + rng() * (w - 2 * mx), y: my + rng() * (h - 2 * my) };
+      if (isSafe(p)) return { x: p.x, y: p.y, ok: true };
     }
-    const corner = farthestCorner(target, bounds);
-    if (distanceSquared(corner, target) > SPAWN_DISTANCE ** 2) return corner;
-    const fallback = farthestCorner(target, { left: 0, right: w, top: 0, bottom: h });
-    return distanceSquared(fallback, target) > SPAWN_DISTANCE ** 2 ? fallback : null;
-  }
-
-  function farthestCorner(target, bounds) {
-    const corners = [
-      { x: bounds.left, y: bounds.top }, { x: bounds.right, y: bounds.top },
-      { x: bounds.left, y: bounds.bottom }, { x: bounds.right, y: bounds.bottom },
-    ];
-    return corners.reduce((best, point) =>
-      distanceSquared(point, target) > distanceSquared(best, target) ? point : best);
-  }
-
-  function resize(vehicles, count, target, w, h, createVehicle, rng = Math.random) {
-    if (!Number.isInteger(count) || count < MIN_COUNT || count > MAX_COUNT) {
-      throw new RangeError('Le nombre de véhicules doit être un entier entre 1 et 200.');
+    const corners = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: 0, y: h }, { x: w, y: h }];
+    let best = corners[0];
+    let bestDist = -1;
+    for (const c of corners) {
+      const d = Math.hypot(c.x - targetPos.x, c.y - targetPos.y);
+      if (d > bestDist) { best = c; bestDist = d; }
     }
-    if (count < vehicles.length) vehicles.length = count;
-    while (vehicles.length < count) {
-      const vehicle = createVehicle(0, 0);
-      const point = spawnPosition(target, w, h, vehicle.r, rng)
-        ?? farthestCorner(target, { left: 0, right: w, top: 0, bottom: h });
-      vehicle.pos.set(point.x, point.y);
-      vehicles.push(vehicle);
-    }
+    return { x: best.x, y: best.y, ok: isSafe(best) };
   }
 
-  function respawn(vehicle, target, w, h, rng = Math.random) {
-    const point = spawnPosition(target, w, h, vehicle.r, rng);
-    if (!point) return false;
-    vehicle.pos.set(point.x, point.y);
+  // Réapparition de la MÊME instance, vitesse et accélération nulles.
+  function respawn(vehicle, w, h, targetPos, rng = Math.random) {
+    const p = pickPosition(w, h, targetPos, rng);
+    if (!p.ok) return false;  // géométrie impossible : on diffère
+    vehicle.pos.set(p.x, p.y);
     vehicle.vel.set(0, 0);
     vehicle.acc.set(0, 0);
     return true;
   }
 
-  function step(vehicle, target, w, h, rng = Math.random) {
-    if (hasArrived(vehicle, target)) {
-      respawn(vehicle, target, w, h, rng);
-      return;
+  // Ajoute ou retire uniquement ce qui manque/dépasse (les premiers restent intacts).
+  function resize(vehicles, count, factory, w, h, targetPos, rng = Math.random) {
+    const n = clampCount(count);
+    while (vehicles.length < n) {
+      const p = pickPosition(w, h, targetPos, rng);
+      vehicles.push(factory(p.x, p.y));
     }
-    vehicle.applyBehaviors(target);
+    if (vehicles.length > n) vehicles.length = n;
+    return vehicles.length;
+  }
+
+  // Une image pour un véhicule : seek -> update -> edges, avec test d'arrivée
+  // avant et après le déplacement. Au plus une réapparition par image.
+    function step(vehicle, targetPos, w, h, rng = Math.random) {
+    if (hasArrived(vehicle.pos, targetPos)) {
+      respawn(vehicle, w, h, targetPos, rng);
+      return true;
+    }
+    vehicle.applyBehaviors(targetPos);
     vehicle.update();
     vehicle.edges();
-    if (hasArrived(vehicle, target)) respawn(vehicle, target, w, h, rng);
+    if (hasArrived(vehicle.pos, targetPos)) {
+      respawn(vehicle, w, h, targetPos, rng);
+      return true;
+    }
+    return false;
   }
 
-  function bindSlider(slider, output, vehicles, target, dimensions, createVehicle, rng = Math.random) {
-    const synchronize = () => {
-      const { width: w, height: h } = dimensions();
-      resize(vehicles, Number(slider.value), target, w, h, createVehicle, rng);
-      output.value = `${vehicles.length} / ${MAX_COUNT}`;
+  // Slider branché sur l'événement "input" (pas "change") : effet immédiat.
+  function bindSlider(slider, output, vehicles, targetPos, getSize, factory, rng = Math.random) {
+    const sync = () => {
+      const { width, height } = getSize();
+      const n = resize(vehicles, slider.value, factory, width, height, targetPos, rng);
+      slider.value = n;
+      output.textContent = `${n} / ${MAX_COUNT}`;
     };
-    slider.addEventListener('input', synchronize);
-    synchronize();
+    slider.addEventListener('input', sync);
+    sync();
+    return sync;
   }
 
-  return { MIN_COUNT, MAX_COUNT, INITIAL_COUNT, ARRIVAL_RADIUS,
-    hasArrived, spawnPosition, resize, respawn, step, bindSlider };
+  return {
+    MIN_COUNT, MAX_COUNT, INITIAL_COUNT, ARRIVAL_RADIUS, SAFE_DISTANCE,
+    clampCount, hasArrived, pickPosition, respawn, resize, step, bindSlider
+  };
 })();
+
+if (typeof module !== 'undefined') module.exports = SeekPopulation;

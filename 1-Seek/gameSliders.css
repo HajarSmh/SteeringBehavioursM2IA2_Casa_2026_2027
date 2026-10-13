@@ -1,0 +1,121 @@
+/* Curseurs façon HUD de jeu vidéo : barres segmentées, pouce pixel, néon, LCD. */
+#controls {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #e8ffe8;
+  background: linear-gradient(#10102a, #1a0b3a);
+  border-bottom: 4px solid #000;
+  box-shadow: 0 4px 0 #ff2bd6, 0 6px 18px rgba(255, 43, 214, 0.5);
+}
+
+#controls label {
+  color: #bfffe9;
+  text-shadow: 2px 2px 0 #000;
+}
+
+/* --- barre ---------------------------------------------------------------- */
+#controls input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  --pct: 50%;
+  --c: #39ff14;
+  width: 150px;
+  height: 26px;
+  background: transparent;
+  cursor: pointer;
+  vertical-align: middle;
+}
+#vehicle-count { --c: #00e5ff; }
+#split-delay   { --c: #ff2bd6; }
+#music-volume  { --c: #ffe600; }
+
+#controls input[type=range]::-webkit-slider-runnable-track {
+  height: 14px;
+  border: 3px solid #fff;
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 8px, rgba(0, 0, 0, 0.65) 8px 10px),
+    linear-gradient(90deg, var(--c) var(--pct), #1b1b3a var(--pct));
+  box-shadow: 0 0 0 3px #000, 0 0 12px var(--c), inset 0 3px 0 rgba(255, 255, 255, 0.35);
+}
+#controls input[type=range]::-moz-range-track {
+  height: 14px;
+  border: 3px solid #fff;
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 8px, rgba(0, 0, 0, 0.65) 8px 10px),
+    linear-gradient(90deg, var(--c) var(--pct), #1b1b3a var(--pct));
+  box-shadow: 0 0 0 3px #000, 0 0 12px var(--c);
+}
+
+/* --- pouce pixel ---------------------------------------------------------- */
+#controls input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 28px;
+  margin-top: -9px;
+  border: 3px solid #000;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--c), 0 0 14px var(--c);
+  transition: transform 0.08s steps(2);
+}
+#controls input[type=range]::-moz-range-thumb {
+  width: 8px;
+  height: 22px;
+  border: 3px solid #000;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--c), 0 0 14px var(--c);
+}
+#controls input[type=range]:hover::-webkit-slider-thumb  { transform: translateY(-2px); background: #fffbc2; }
+#controls input[type=range]:active::-webkit-slider-thumb { transform: translateY(2px) scale(1.15); background: var(--c); }
+#controls input[type=range]:focus-visible { outline: 3px dashed #fff; outline-offset: 4px; }
+
+/* petite secousse "coup de manette" à chaque changement */
+#controls input[type=range].bump { animation: bump 0.18s steps(3); }
+@keyframes bump {
+  0%   { transform: translate(0, 0); }
+  33%  { transform: translate(-2px, 1px) scale(1.04); }
+  66%  { transform: translate(2px, -1px) scale(1.04); }
+  100% { transform: translate(0, 0); }
+}
+
+/* --- afficheurs LCD ------------------------------------------------------- */
+#controls output {
+  display: inline-block;
+  min-width: 11ch;
+  padding: 6px 8px;
+  text-align: center;
+  color: #39ff14;
+  background: #000;
+  border: 3px solid #39ff14;
+  text-shadow: 0 0 6px #39ff14;
+  box-shadow: inset 0 0 8px rgba(57, 255, 20, 0.35);
+}
+#controls output#target-count {
+  color: #ff4d6d;
+  border-color: #ff4d6d;
+  text-shadow: 0 0 6px #ff4d6d;
+  box-shadow: inset 0 0 8px rgba(255, 77, 109, 0.35);
+}
+
+/* --- bouton musique ------------------------------------------------------- */
+#controls button {
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  padding: 8px 10px;
+  color: #000;
+  background: #ffe600;
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 0 4px 0 #a08c00, 0 0 12px rgba(255, 230, 0, 0.6);
+  cursor: pointer;
+}
+#controls button:hover  { background: #fff36b; }
+#controls button:active { transform: translateY(4px); box-shadow: 0 0 0 #a08c00; }
+#controls button[aria-pressed="true"] { background: #ff2bd6; color: #fff; box-shadow: 0 4px 0 #7a1a6a, 0 0 12px rgba(255, 43, 214, 0.7); }

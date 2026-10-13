@@ -3,21 +3,52 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seek — population de véhicules</title>
+    <title>Seek — cibles qui se divisent</title>
     <link rel="stylesheet" href="style.css">
-    <script src="libraries/p5.min.js"></script>
-    <script src="vehicle.js"></script>
-    <script src="population.js"></script>
-    <script src="mouseTarget.js"></script>
-    <script src="sketch.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+    <link rel="stylesheet" href="gameSliders.css">
+<script src="libraries/p5.min.js"></script>
+<script src="vehicle.js"></script>
+<script src="snake.js"></script>
+<script src="fruit.js"></script>
+<script src="poop.js"></script>
+<script src="population.js"></script>
+<script src="decoy.js"></script>
+<script src="randomTarget.js"></script>
+<script src="splitRing.js"></script>
+<script src="targetSwarm.js"></script>
+<script src="background.js"></script>
+<script src="music.js"></script>
+<script src="mouseInfluence.js"></script>
+<script src="gameSliders.js"></script>
+<script src="sketch.js"></script>
   </head>
   <body>
     <header id="controls">
       <label for="vehicle-count">Véhicules :</label>
       <input id="vehicle-count" type="range" min="1" max="200" step="1" value="20">
       <output id="vehicle-count-value" for="vehicle-count">20 / 200</output>
-      <span class="hint">Déplacez la souris dans la scène pour guider la cible rouge.</span>
+
+      <label for="split-delay">Division après :</label>
+      <input id="split-delay" type="range" min="5" max="60" step="1" value="30">
+      <output id="split-delay-value" for="split-delay">30 s</output>
+
+      <output id="target-count">Cibles : 2</output>
+
+      <label for="snake-spacing">Écart points :</label>
+<input id="snake-spacing" type="range" min="0.2" max="1" step="0.05" value="0.55">
+<output id="snake-spacing-value" for="snake-spacing">0.55</output>
+
+<label for="snake-length">Longueur :</label>
+<input id="snake-length" type="range" min="0.3" max="2" step="0.1" value="1">
+<output id="snake-length-value" for="snake-length">×1.0</output>
+
+      <button id="music-toggle" type="button" aria-pressed="false">🎵 Lancer la musique</button>
+      <label for="music-volume">Volume :</label>
+      <input id="music-volume" type="range" min="0" max="100" step="1" value="80">
     </header>
-    <main id="scene" aria-label="Simulation de véhicules poursuivant une cible"></main>
+    <main id="scene" aria-label="Simulation de véhicules poursuivant des cibles"></main>
   </body>
 </html>
