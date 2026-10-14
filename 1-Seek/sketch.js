@@ -15,6 +15,8 @@ let track;                                          // la piste
 const bushes = [];                                  // buissons ronds (obstacles pour les 3 serpents)
 const BUSH_COUNT = 6;                              // nombre de buissons demandé
 let trackSnake;                                     // serpent qui suit la piste
+const birds = [];                                   // oiseaux qui volent partout
+const BIRD_COUNT = 25;                              // nombre d'oiseaux
 // Passe à true pour réafficher les avions et les vaisseaux (leur code est conservé)
 const SHOW_PLANES_AND_SHIPS = false;
 const mouseState = { x: 0.5, y: 0.5 };              // valeurs lissées 0..1
@@ -64,6 +66,11 @@ function setup() {
   scatterBushes();
   document.getElementById('car-add').addEventListener('click', addCar);
   document.getElementById('car-remove').addEventListener('click', () => cars.pop());
+
+  // Oiseaux : placés au hasard sur tout l'écran
+  for (let i = 0; i < BIRD_COUNT; i++) {
+    birds.push(new Bird(random(width), random(height)));
+  }
 
   for (let i = 0; i < TargetSwarm.INITIAL_TARGETS; i++) targets.push(newTarget());
 
@@ -287,6 +294,13 @@ function draw() {
   for (const f of fruits) f.show();
   for (const p of poops) p.show();
   for (const s of snakes) s.show();
+
+  // --- Oiseaux : ils volent au-dessus de tout, donc dessinés en dernier ---
+  for (const b of birds) {
+    b.fly(birds);   // flocking + déplacement + réapparition de l'autre côté
+    b.show();       // ombre + oiseau avec battement d'ailes
+  }
+
   for (let i = effects.length - 1; i >= 0; i--) {
     effects[i].advance(dt);
     effects[i].show();
@@ -318,5 +332,8 @@ function windowResized() {
   }
   for (const f of fruits) {
     f.pos.set(constrain(f.pos.x, 0, width), constrain(f.pos.y, 0, height));
+  }
+  for (const b of birds) {
+    b.pos.set(constrain(b.pos.x, 0, width), constrain(b.pos.y, 0, height));
   }
 }
