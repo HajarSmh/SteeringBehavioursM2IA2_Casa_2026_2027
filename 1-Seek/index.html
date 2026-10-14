@@ -11,7 +11,10 @@
     <link rel="stylesheet" href="gameSliders.css">
 <script src="libraries/p5.min.js"></script>
 <script src="vehicle.js"></script>
+<script src="track.js"></script>
+<script src="car.js"></script>
 <script src="snake.js"></script>
+<script src="trackSnake.js"></script>
 <script src="fruit.js"></script>
 <script src="poop.js"></script>
 <script src="population.js"></script>
@@ -23,6 +26,9 @@
 <script src="music.js"></script>
 <script src="mouseInfluence.js"></script>
 <script src="gameSliders.js"></script>
+<script src="bush.js"></script>
+<script src="stone.js"></script>
+<script src="avoid.js"></script>
 <script src="sketch.js"></script>
   </head>
   <body>
@@ -30,7 +36,9 @@
       <label for="vehicle-count">Véhicules :</label>
       <input id="vehicle-count" type="range" min="1" max="200" step="1" value="20">
       <output id="vehicle-count-value" for="vehicle-count">20 / 200</output>
-
+<button id="car-add" type="button">🚗 Ajouter une voiture</button>
+<button id="car-remove" type="button">Retirer</button>
+<output id="car-count">Voitures : 0</output>
       <label for="split-delay">Division après :</label>
       <input id="split-delay" type="range" min="5" max="60" step="1" value="30">
       <output id="split-delay-value" for="split-delay">30 s</output>

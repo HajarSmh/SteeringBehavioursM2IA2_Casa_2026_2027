@@ -7,6 +7,16 @@ const effects = [];                                 // anneaux d'animation
 const snakes = [];                                  // 3 serpents qui suivent la souris
 const fruits = [];                                  // fruits immobiles, réveillés par un serpent proche
 const poops = [];                                   // crottes éjectées par les serpents
+const cars = [];                                    // voitures qui suivent la piste
+const MAX_CARS = 100;
+const stones = [];                                  // pierres rondes posées sur la piste
+const STONE_COUNT = 20;                              // nombre de pierres
+let track;                                          // la piste
+const bushes = [];                                  // buissons ronds (obstacles pour les 3 serpents)
+const BUSH_COUNT = 6;                              // nombre de buissons demandé
+let trackSnake;                                     // serpent qui suit la piste
+// Passe à true pour réafficher les avions et les vaisseaux (leur code est conservé)
+const SHOW_PLANES_AND_SHIPS = false;
 const mouseState = { x: 0.5, y: 0.5 };              // valeurs lissées 0..1
 const NO_EXCLUSION = { x: -1e6, y: -1e6 };          // pas de cible unique à éviter pour les ajouts
 const YELLOW_HUE = 52;
@@ -27,15 +37,43 @@ function newFruit() {
     x = random(40, width - 40);
     y = random(40, height - 40);
     tries++;
-  } while (tries < 20 && snakes.some(s => dist(x, y, s.head.pos.x, s.head.pos.y) < 200));
+  } while (tries < 20 && (snakes.some(s => dist(x, y, s.head.pos.x, s.head.pos.y) < 200) ||
+                          bushes.some(b => dist(x, y, b.pos.x, b.pos.y) < b.r + 20)));
   return new Fruit(x, y);
+}
+
+function scatterBushes() {
+  bushes.length = 0;
+  bushes.push(...Bush.scatter(BUSH_COUNT, width, height, track));
+}
+
+function addCar() {
+  if (cars.length >= MAX_CARS) return;
+  cars.push(new Car(track, track.bestStart(cars.concat(stones))));
 }
 
 function setup() {
   sceneCanvas = createCanvas(windowWidth, sceneHeight());
   sceneCanvas.parent('scene');
 
+  // Piste + voitures de départ
+  track = new Track(width, height);
+  stones.push(...Stone.scatter(STONE_COUNT, track));
+  addCar(); addCar(); addCar();
+  trackSnake = new TrackSnake(track, track.bestStart(cars.concat(stones)));
+  scatterBushes();
+  document.getElementById('car-add').addEventListener('click', addCar);
+  document.getElementById('car-remove').addEventListener('click', () => cars.pop());
+
   for (let i = 0; i < TargetSwarm.INITIAL_TARGETS; i++) targets.push(newTarget());
+
+  // Avions et vaisseaux masqués : on cache aussi leurs commandes
+  if (!SHOW_PLANES_AND_SHIPS) {
+    document.querySelectorAll(
+      '#vehicle-count, #vehicle-count-value, label[for="vehicle-count"], ' +
+      '#split-delay, #split-delay-value, label[for="split-delay"], #target-count'
+    ).forEach(el => { el.style.display = 'none'; });
+  }
 
   // Serpents : largeurs et longueurs différentes (voir SNAKE_SPECS dans snake.js)
   SNAKE_SPECS.forEach((spec, i) => {
@@ -113,6 +151,9 @@ function draw() {
   // --- Fond psychédélique rétro ---
   RetroBackground.draw(drawingContext, width, height, millis() / 1000, mouseState.x, mouseState.y);
 
+  // --- Piste (dessinée par-dessus le fond) ---
+  track.show();
+
   // --- Musique ---
   if (typeof PsychedelicMusic !== 'undefined') {
     PsychedelicMusic.setMouse(mouseState.x, mouseState.y);
@@ -120,7 +161,13 @@ function draw() {
 
   // --- Serpents : la tête suit la souris, le corps suit la tête ---
   const t = millis() / 1000;
-  for (const s of snakes) s.follow(mousePos, t, width, height);
+  for (const s of snakes) s.follow(mousePos, t, width, height, bushes);
+
+  // --- Voitures : suivent la piste et restent dans ses contours ---
+  // obstacles des voitures et du serpent de circuit : pierres + les 3 serpents de la souris
+  const trackObstacles = stones.concat(snakes.flatMap(s => s.circles()));
+  for (const c of cars) c.follow(track, cars, trackSnake.bodyPoints(), trackObstacles);
+  trackSnake.follow(track, cars, trackObstacles);
 
   // --- Fruits : ils foncent vers le serpent très proche, puis sont mangés ---
   for (let i = fruits.length - 1; i >= 0; i--) {
@@ -134,7 +181,7 @@ function draw() {
   }
   while (fruits.length < FRUIT_COUNT) fruits.push(newFruit());
 
-// --- Crottes : éjectées du dernier point, glissent puis s'effacent (Sécurisé) ---
+  // --- Crottes : éjectées du dernier point, glissent puis s'effacent (Sécurisé) ---
   for (const s of snakes) {
     if (typeof s.updateDigestion === 'function') {
       const newPoops = s.updateDigestion(dt);
@@ -154,6 +201,7 @@ function draw() {
     if (p.done) poops.splice(i, 1);
   }
 
+  if (SHOW_PLANES_AND_SHIPS) {
   // --- Avions : fuient véhicules + souris ---
   for (const targetItem of targets) {
     targetItem.setStyle(mouseState.x, mouseState.y);
@@ -222,13 +270,20 @@ function draw() {
     effects.push(new SplitRing(fresh.pos.x, fresh.pos.y, fresh.displayHue(),
       { duration: 0.8, maxRadius: 90 }));
   }
+  } // fin SHOW_PLANES_AND_SHIPS
 
   // --- Dessin de tous les éléments et des animations ---
-  for (const d of decoys) d.show();
-  for (const targetItem of targets) {
-    targetItem.setLife(lifespan);
-    targetItem.show();
+  if (SHOW_PLANES_AND_SHIPS) {
+    for (const d of decoys) d.show();
+    for (const targetItem of targets) {
+      targetItem.setLife(lifespan);
+      targetItem.show();
+    }
   }
+  for (const b of bushes) b.show();
+  for (const st of stones) st.show();
+  for (const c of cars) c.show();
+  trackSnake.show();
   for (const f of fruits) f.show();
   for (const p of poops) p.show();
   for (const s of snakes) s.show();
@@ -241,10 +296,19 @@ function draw() {
   const label = `Cibles : ${targets.length}`;
   const countOutput = document.getElementById('target-count');
   if (countOutput.textContent !== label) countOutput.textContent = label;
+
+  const carLabel = `Voitures : ${cars.length}`;
+  const carOutput = document.getElementById('car-count');
+  if (carOutput.textContent !== carLabel) carOutput.textContent = carLabel;
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, sceneHeight());
+  track.rebuild(width, height);
+  for (const st of stones) st.place(track);
+  scatterBushes();
+  for (const c of cars) c.snapToTrack(track);
+  trackSnake.snapToTrack(track);
   for (const targetItem of targets) {
     targetItem.pos.set(constrain(targetItem.pos.x, 0, width), constrain(targetItem.pos.y, 0, height));
   }

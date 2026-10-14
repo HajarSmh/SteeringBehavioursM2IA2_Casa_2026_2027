@@ -41,8 +41,13 @@ class SnakeHead extends Vehicle {
   }
 
   // Forces + regard. lookAt = position réelle de la souris (ou null).
-  steer(target, lookAt, t) {
+  steer(target, lookAt, t, bushes = []) {
     this.applyForce(this.arrive(target));
+    // évitement des buissons : algorithme ahead / ahead2 (voir avoid.js), force x3
+    if (bushes.length) {
+      this.applyForce(aheadAvoid(this, bushes,
+        { zone: this.r * 1.3, goal: p5.Vector.sub(target, this.pos) }).mult(3));
+    }
 
     // ondulation : petite force perpendiculaire sinusoïdale => il serpente
     const speed = this.vel.mag();
@@ -266,7 +271,7 @@ class Snake extends Vehicle {
 
   // Cible : autour de la souris (chaque serpent sur sa propre orbite) ou, sans souris,
   // une balade en courbe de Lissajous.
-  follow(mousePos, t, w, h) {
+  follow(mousePos, t, w, h, bushes = []) {
     let target;
     let lookAt = null;
     if (mousePos) {
@@ -282,20 +287,52 @@ class Snake extends Vehicle {
         h / 2 + Math.sin(t * 0.47 + this.index * 1.3) * h * 0.36
       );
     }
-    this.head.steer(target, lookAt, t);
+    this.head.steer(target, lookAt, t, bushes);
     this.head.update();
+    this.pushOutOfBushes(this.head.pos, this.head.r * 1.15, bushes, this.head.vel);
     this.head.pos.set(constrain(this.head.pos.x, 0, w), constrain(this.head.pos.y, 0, h));
-    this.pull();
+    this.pull(bushes);
+  }
+
+  // Interdit de passer sur un buisson : si le point (de rayon `radius`) entre dans un
+  // buisson, il est replacé sur son bord ; la vitesse vers l'intérieur est annulée.
+  pushOutOfBushes(p, radius, bushes, vel = null) {
+    for (const b of bushes) {
+      const dx = p.x - b.pos.x;
+      const dy = p.y - b.pos.y;
+      const d = Math.hypot(dx, dy) || 1e-6;
+      const minD = b.r + radius;
+      if (d >= minD) continue;
+      const nx = dx / d, ny = dy / d;
+      p.set(b.pos.x + nx * minD, b.pos.y + ny * minD);
+      if (vel) {
+        const vn = vel.x * nx + vel.y * ny;
+        if (vn < 0) vel.sub(nx * vn, ny * vn);
+      }
+    }
+  }
+
+  // Cercles de collision (tête + corps) : les autres véhicules s'en servent comme obstacles
+  // `pad` : le serpent bouge vite, les autres le voient plus gros pour avoir le temps de s'écarter
+  circles() {
+    const pad = Math.min(25, this.head.vel.mag() * 4);
+    const out = [{ pos: this.head.pos, r: this.head.r * 1.15, pad }];
+    for (let i = 0; i < this.segments.length; i++) {
+      out.push({ pos: this.segments[i], r: this.widthAt(i) * 0.5 + 1, pad });
+    }
+    return out;
   }
 
   // Chaque point reste collé au précédent à distance exacte.
-  pull() {
+  pull(bushes = []) {
     let prev = this.head.pos;
-    for (const seg of this.segments) {
+    for (let i = 0; i < this.segments.length; i++) {
+      const seg = this.segments[i];
       const d = p5.Vector.sub(seg, prev);
       if (d.magSq() < 1e-6) d.set(-1, 0);
       d.setMag(this.spacing);
       seg.set(prev.x + d.x, prev.y + d.y);
+      this.pushOutOfBushes(seg, this.widthAt(i) * 0.5 + 1, bushes);   // le corps non plus
       prev = seg;
     }
   }
