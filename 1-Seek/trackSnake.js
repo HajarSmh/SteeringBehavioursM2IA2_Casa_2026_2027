@@ -13,8 +13,17 @@ class TrackSnake extends Snake {
     const p = track.pointAt(s);
     super(p.x, p.y, TRACK_SNAKE_SPEC, 3);
     this.lane = 0;                             // décalage latéral actuel (lissé)
+    this.laneSign = 1;                         // côté choisi au prochain changement de voie
+    this.stuck = 0;                            // images consécutives "quasi immobile"
+    this.avgMove = this.head.vel.mag();        // déplacement moyen par image (lissé)
+    this.prevPos = null;
+    this.ghost = 0;                            // images restantes en mode fantôme
     this.snapToTrack(track, s);
   }
+
+  // Le serpent du circuit garde sa vitesse de base : pas de départ rapide ni de ralentissement
+  // lié à la taille (ça, c'est pour les serpents de la souris). Surcharge Snake.applySpeed().
+  applySpeed() {}
 
   // Place le serpent sur la ligne centrale, corps aligné derrière la tête.
   // Sans s : au point de la piste le plus proche (utile après un redimensionnement).
@@ -27,6 +36,9 @@ class TrackSnake extends Snake {
     this.head.prevVel.set(this.head.vel);
     this.head.acc.set(0, 0);
     this.lane = 0;
+    this.stuck = 0;
+    this.ghost = 0;
+    this.prevPos = null;
     for (let i = 0; i < this.segments.length; i++) {
       const q = track.pointAt(s - this.spacing * (i + 1));
       this.segments[i].set(q.x, q.y);
@@ -79,6 +91,34 @@ class TrackSnake extends Snake {
     }
   }
 
+  // Détection de blocage : si la tête avance à peine pendant ~0,7 s, on change de voie ;
+  // si ça ne suffit pas (~1,7 s), mode FANTÔME : pendant 1,5 s il traverse voitures et pierres
+  // (transparent) en suivant la piste, puis redevient normal. Il ne reste donc jamais coincé.
+  updateStuck(limit) {
+    const p = this.head.pos;
+    if (this.prevPos) {
+      this.avgMove += (p5.Vector.dist(p, this.prevPos) - this.avgMove) * 0.05;
+      this.prevPos.set(p);
+    } else {
+      this.prevPos = p.copy();
+      this.avgMove = this.head.vel.mag();
+    }
+    this.lane *= 0.995;                        // la voie décalée revient doucement au centre
+    if (this.ghost > 0) { this.stuck = 0; return; }
+    if (this.avgMove < 0.7) this.stuck++;
+    else this.stuck = Math.max(0, this.stuck - 2);
+    if (this.stuck === 40) {                   // 1er essai : on tente l'autre côté
+      this.laneSign = -this.laneSign;
+      this.lane = this.laneSign * Math.max(0, limit) * 0.6;
+    }
+    if (this.stuck >= 100) {                   // 2e essai : fantôme
+      this.ghost = 90;
+      this.stuck = 0;
+      this.lane = 0;
+      this.avgMove = this.head.maxSpeed;
+    }
+  }
+
   // Une image : suivre la piste, contourner les voitures, entraîner le corps
   // stones : obstacles ronds { pos, r } (pierres + serpents de la souris)
   follow(track, cars, stones = []) {
@@ -89,11 +129,16 @@ class TrackSnake extends Snake {
     const limit = track.halfWidth - half - 2;
     const look = 36 + speed * 10;
 
+    this.updateStuck(limit);
+    const ghost = this.ghost > 0;
+    if (ghost) this.ghost--;
+    const hardCars = ghost ? [] : cars;        // en mode fantôme, plus aucun obstacle
+    const hardStones = ghost ? [] : stones;
+
     // virage à venir => on ralentit
     const further = track.pointAt(info.s + look * 2.5);
     const dot = Math.max(-1, Math.min(1, info.tx * further.tx + info.ty * further.ty));
     let wanted = head.maxSpeed * (1 - 0.55 * Math.min(1, Math.acos(dot) / 0.9));
-
 
     // seek vers le point d'anticipation décalé sur la voie choisie
     const pt = track.pointAt(info.s + look);
@@ -101,23 +146,46 @@ class TrackSnake extends Snake {
     const desired = p5.Vector.sub(target, head.pos).setMag(wanted);
     head.applyForce(p5.Vector.sub(desired, head.vel).limit(head.maxForce));
 
-    // évitement des pierres ET des voitures : algorithme ahead / ahead2 (voir avoid.js), force x3
-    const obstacles = stones.concat(cars.map(c => ({ pos: c.pos, r: c.r * 1.2 })));
-    head.applyForce(aheadAvoid(head, obstacles, { zone: half + 4, goal: desired }).mult(3));
+    if (!ghost) {
+      // évitement des pierres ET des voitures : algorithme ahead / ahead2 (voir avoid.js), force x3
+      const obstacles = stones.concat(cars.map(c => ({ pos: c.pos, r: c.r * 1.2 })));
+      head.applyForce(aheadAvoid(head, obstacles, { zone: half + 4, goal: desired }).mult(3));
 
-    // séparation : repousse la tête des voitures trop proches
-    const push = createVector(0, 0);
-    for (const c of cars) {
-      const away = p5.Vector.sub(head.pos, c.pos);
-      const d = away.mag();
-      const r = half + c.r * 1.2 + 14;
-      if (d > 0 && d < r) push.add(away.setMag((r - d) / r));
+      // séparation : repousse la tête des voitures trop proches
+      const push = createVector(0, 0);
+      for (const c of cars) {
+        const away = p5.Vector.sub(head.pos, c.pos);
+        const d = away.mag();
+        const r = half + c.r * 1.2 + 14;
+        if (d > 0 && d < r) push.add(away.setMag((r - d) / r));
+      }
+      head.applyForce(push.limit(head.maxForce * 2));
     }
-    head.applyForce(push.limit(head.maxForce * 2));
 
     head.update();
-    this.settle(head.pos, half, track, limit, cars, stones);
-    this.pull(track, cars, stones);
+    const moved = head.pos.copy();             // position avant correction
+    this.settle(head.pos, half, track, limit, hardCars, hardStones);
+    // La correction est un déplacement imposé : on annule la vitesse qui pousse contre elle
+    // (sinon elle s'accumule, la tête reste plaquée contre l'obstacle et "s'arrête").
+    const fix = p5.Vector.sub(head.pos, moved);
+    if (fix.magSq() > 1e-6) {
+      const n = fix.normalize();
+      const vn = head.vel.dot(n);
+      if (vn < 0) head.vel.sub(p5.Vector.mult(n, vn));
+    }
+    this.pull(track, hardCars, hardStones);
+  }
+
+  // Semi-transparent en mode fantôme
+  show() {
+    if (this.ghost > 0) {
+      drawingContext.save();
+      drawingContext.globalAlpha = 0.45;
+      super.show();
+      drawingContext.restore();
+    } else {
+      super.show();
+    }
   }
 
   // Chaque point reste collé au précédent, mais ne traverse ni voiture ni bordure.

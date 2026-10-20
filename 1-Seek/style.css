@@ -35,6 +35,59 @@ canvas {
   display: block;
 }
 
+#scene {
+  position: relative;
+}
+
+/* --- écran Game Over ------------------------------------------------------ */
+#game-over,
+#victory {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(10, 0, 20, 0.72);
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  text-align: center;
+  text-transform: uppercase;
+}
+#game-over[hidden],
+#victory[hidden] { display: none; }
+#game-over h2,
+#victory h2 {
+  margin: 0;
+  font-size: clamp(28px, 7vw, 72px);
+  color: #ff3158;
+  text-shadow: 4px 4px 0 #000, 0 0 24px #ff3158;
+}
+#game-over p,
+#victory p {
+  margin: 0;
+  font-size: clamp(10px, 1.6vw, 16px);
+  color: #e8ffe8;
+  text-shadow: 2px 2px 0 #000;
+}
+#restart,
+#restart-victory {
+  font: inherit;
+  font-size: clamp(12px, 2vw, 20px);
+  padding: 14px 22px;
+  color: #000;
+  background: #ffe600;
+  border: 4px solid #000;
+  border-radius: 0;
+  box-shadow: 0 6px 0 #a08c00, 0 0 18px rgba(255, 230, 0, 0.7);
+  cursor: pointer;
+  text-transform: uppercase;
+}
+#restart:hover,
+#restart-victory:hover { background: #fff36b; }
+#restart:active,
+#restart-victory:active { transform: translateY(6px); box-shadow: 0 0 0 #a08c00; }
+
 #music-toggle {
   min-height: 32px;
   padding: 4px 12px;
@@ -65,4 +118,114 @@ canvas {
 #target-count {
   min-width: 70px;
   font-variant-numeric: tabular-nums;
+}
+#victory h2 {
+  color: #39ff14;
+  text-shadow: 4px 4px 0 #000, 0 0 24px #39ff14;
+}
+
+/* --- écran de départ ------------------------------------------------------ */
+#start-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+  background: rgba(10, 0, 20, 0.78);
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  text-align: center;
+}
+#start-screen[hidden] { display: none; }
+.start-panel {
+  width: min(920px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: clamp(14px, 2.4vw, 28px);
+  background: linear-gradient(#10102a, #1a0b3a);
+  border: 4px solid #fff;
+  box-shadow: 0 0 0 4px #000, 0 0 0 8px #ff2bd6, 0 0 32px rgba(255, 43, 214, 0.6);
+}
+.start-panel h1 {
+  margin: 0 0 clamp(10px, 2vh, 20px);
+  font-size: clamp(16px, 3.6vw, 36px);
+  line-height: 1.4;
+  color: #ffe600;
+  text-shadow: 3px 3px 0 #000, 0 0 18px #ff9d00;
+}
+.start-panel p {
+  margin: 0 0 clamp(8px, 1.6vh, 14px);
+  font-size: clamp(8px, 1.25vw, 13px);
+  line-height: 1.9;
+  color: #e8ffe8;
+  text-shadow: 2px 2px 0 #000;
+}
+.start-panel p.warn { color: #ffb3c1; }
+.start-panel p.tagline {
+  margin-top: clamp(10px, 2vh, 18px);
+  color: #39ff14;
+  text-shadow: 2px 2px 0 #000, 0 0 12px #39ff14;
+}
+.start-panel .settings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 32px;
+  margin: clamp(12px, 2.4vh, 22px) 0;
+}
+.start-panel .counter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: clamp(9px, 1.3vw, 13px);
+  color: #bfffe9;
+  text-shadow: 2px 2px 0 #000;
+}
+.start-panel .counter output {
+  min-width: 2.5ch;
+  padding: 6px 8px;
+  text-align: center;
+  color: #39ff14;
+  background: #000;
+  border: 3px solid #39ff14;
+  text-shadow: 0 0 6px #39ff14;
+  box-shadow: inset 0 0 8px rgba(57, 255, 20, 0.35);
+}
+.start-panel .counter button {
+  font: inherit;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #000;
+  background: #ffe600;
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 0 4px 0 #a08c00;
+  cursor: pointer;
+}
+.start-panel .counter button:hover  { background: #fff36b; }
+.start-panel .counter button:active { transform: translateY(4px); box-shadow: 0 0 0 #a08c00; }
+#start-game {
+  font: inherit;
+  font-size: clamp(12px, 2vw, 20px);
+  padding: 14px 22px;
+  color: #000;
+  background: #ffe600;
+  border: 4px solid #000;
+  border-radius: 0;
+  box-shadow: 0 6px 0 #a08c00, 0 0 18px rgba(255, 230, 0, 0.7);
+  cursor: pointer;
+}
+#start-game:hover  { background: #fff36b; }
+#start-game:active { transform: translateY(6px); box-shadow: 0 0 0 #a08c00; }
+
+/* libellé + curseur + valeur restent ensemble (ils passent à la ligne d'un bloc) */
+.control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px 12px;
+  white-space: nowrap;
 }

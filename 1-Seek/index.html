@@ -16,7 +16,7 @@
 <script src="snake.js"></script>
 <script src="trackSnake.js"></script>
 <script src="fruit.js"></script>
-<script src="poop.js"></script>
+<script src="fireball.js"></script>
 <script src="population.js"></script>
 <script src="decoy.js"></script>
 <script src="randomTarget.js"></script>
@@ -31,6 +31,8 @@
 <script src="avoid.js"></script>
 <script src="boids.js"></script>
 <script src="bird.js"></script>
+<script src="dragon.js"></script>
+<script src="debug.js"></script>
 <script src="sketch.js"></script>
   </head>
   <body>
@@ -50,15 +52,55 @@
       <label for="snake-spacing">Écart points :</label>
 <input id="snake-spacing" type="range" min="0.2" max="1" step="0.05" value="0.55">
 <output id="snake-spacing-value" for="snake-spacing">0.55</output>
+      <button id="debug-toggle" type="button" aria-pressed="false">🐞 Debug (D)</button>
 
-<label for="snake-length">Longueur :</label>
-<input id="snake-length" type="range" min="0.3" max="2" step="0.1" value="1">
-<output id="snake-length-value" for="snake-length">×1.0</output>
+      <span class="control-group">
+        <label for="bg-dim">Fond :</label>
+        <input id="bg-dim" type="range" min="0" max="100" step="1" value="100">
+        <output id="bg-dim-value" for="bg-dim">100 %</output>
+      </span>
 
       <button id="music-toggle" type="button" aria-pressed="false">🎵 Lancer la musique</button>
       <label for="music-volume">Volume :</label>
       <input id="music-volume" type="range" min="0" max="100" step="1" value="80">
     </header>
-    <main id="scene" aria-label="Simulation de véhicules poursuivant des cibles"></main>
+    <main id="scene" aria-label="Simulation de véhicules poursuivant des cibles">
+      <div id="start-screen">
+        <div class="start-panel">
+          <h1>🐉 DRAGON SURVIVAL 🔥</h1>
+          <p>Survis, nourris les serpents et élimine tous les dragons !</p>
+          <p class="warn">🐲 Les dragons grandissent quand ils mordent, mais rétrécissent quand ils avalent tes boules de feu. Trop petits, ils disparaissent !</p>
+          <p>⚔️ Ton défi : tuer tous les dragons sans perdre tous les serpents.</p>
+          <p class="tagline">🎮 SURVIS. COMBATS. DEVIENS LE MAÎTRE DU JEU.</p>
+          <div class="settings">
+            <div class="counter">
+              <span>🐲 Dragons</span>
+              <button id="dragon-minus" type="button" aria-label="Moins de dragons">−</button>
+              <output id="dragon-count-value">2</output>
+              <button id="dragon-plus" type="button" aria-label="Plus de dragons">+</button>
+            </div>
+            <div class="counter">
+              <span>🐍 Serpents</span>
+              <button id="snake-minus" type="button" aria-label="Moins de serpents">−</button>
+              <output id="snake-count-value">3</output>
+              <button id="snake-plus" type="button" aria-label="Plus de serpents">+</button>
+            </div>
+          </div>
+          <button id="start-game" type="button">[ START GAME ]</button>
+        </div>
+      </div>
+      <div id="game-over" hidden>
+        <h2>GAME OVER</h2>
+        <p>Tous les serpents sont morts…</p>
+        <p id="game-over-time"></p>
+        <button id="restart" type="button">↻ Restart</button>
+      </div>
+      <div id="victory" hidden>
+        <h2>VICTORY</h2>
+        <p>Tous les dragons sont morts !</p>
+        <p id="victory-time"></p>
+        <button id="restart-victory" type="button">↻ Restart</button>
+      </div>
+    </main>
   </body>
 </html>

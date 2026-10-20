@@ -30,6 +30,7 @@
 #vehicle-count { --c: #00e5ff; }
 #split-delay   { --c: #ff2bd6; }
 #music-volume  { --c: #ffe600; }
+#bg-dim        { --c: #9d6bff; }
 
 #controls input[type=range]::-webkit-slider-runnable-track {
   height: 14px;

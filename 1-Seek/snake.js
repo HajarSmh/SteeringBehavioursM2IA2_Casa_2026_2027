@@ -10,6 +10,16 @@ const SNAKE_SPECS = [
   { name: 'Gros',   count: 14, width: 34, maxSpeed: 3.6, maxForce: 0.15, hue: 38,  orbit: 170, orbitSpeed: 0.5 }
 ];
 
+// Vitesse : le serpent est TRÈS RAPIDE au début (x2.2 de la vitesse de base) puis ralentit
+// à mesure qu'il grossit : facteur = BOOST / taille^EXPOSANT (2.2 à taille 1, ~1.5 à x1.5, ~0.6 à x3).
+const START_SPEED_BOOST = 2.2;
+const SPEED_EXPONENT = 1.2;
+
+// Croissance : chaque fruit mangé agrandit le serpent (et le ralentit).
+const GROWTH_PER_FRUIT = 0.2;    // +20 % de taille par fruit
+const MAX_GROWTH_SCALE = 3;      // taille maximale (x3)
+const BITE_FRACTION = 0.2;       // une morsure de dragon retire 20 % des points de base (min. 2)
+
 class SnakeHead extends Vehicle {
   constructor(x, y, { radius, maxSpeed, maxForce, hue }) {
     super(x, y);
@@ -161,38 +171,6 @@ class SnakeHead extends Vehicle {
   }
 }
 
-class Poop {
-  constructor(x, y, dir, { size }) {
-    this.pos = createVector(x, y);
-    this.vel = dir.copy();
-    this.size = size;
-    this.life = 4.0; // Durée de vie en secondes
-    this.done = false;
-  }
-
-  advance(dt) {
-    this.life -= dt;
-    if (this.life <= 0) {
-      this.done = true;
-    }
-  }
-
-  update() {
-    this.pos.add(this.vel);
-    this.vel.mult(0.92); // Glissement progressif (ralentissement)
-  }
-
-  show() {
-    push();
-    colorMode(HSB, 360, 100, 100, 1);
-    noStroke();
-    const alpha = constrain(this.life / 1.0, 0, 1);
-    fill(25, 65, 35, alpha); // Couleur terre / marron
-    ellipse(this.pos.x, this.pos.y, this.size, this.size * 0.75);
-    pop();
-  }
-}
-
 class Snake extends Vehicle {
   constructor(x, y, spec, index = 0) {
     super(x, y);
@@ -203,6 +181,9 @@ class Snake extends Vehicle {
     this.spacingRatio = 0.55;                           // écart = largeur * ratio
     this.spacing = this.width * this.spacingRatio;     // distance fixe entre deux points
     this.lengthScale = 1;                              // multiplicateur du nombre de points
+    this.sizeScale = 1;                                // taille actuelle (animée)
+    this.sizeGoal = 1;                                 // taille visée (augmente à chaque fruit)
+    this.lost = 0;                                     // points perdus à cause des morsures de dragon
     this.digesting = [];                               // minuteurs avant d'éjecter une crotte
     this.head = new SnakeHead(x, y, {
       radius: spec.width * 0.65,
@@ -214,6 +195,7 @@ class Snake extends Vehicle {
     this.pos = this.head.pos;
     this.vel = this.head.vel;
     this.acc = this.head.acc;
+    this.applySpeed();                                 // départ rapide
 
     const back = p5.Vector.fromAngle(this.head.angle + Math.PI);
     this.segments = [];
@@ -231,16 +213,54 @@ class Snake extends Vehicle {
   // Curseur "longueur" : multiplie le nombre de points de base (spec.count)
   setLengthScale(k) {
     this.lengthScale = k;
-    const n = Math.max(3, Math.round(this.spec.count * k));
+    this.applyLength();
+  }
+
+  // Nombre de points = base * curseur * bonus de croissance (un gros serpent est aussi plus long)
+  applyLength() {
+    const growth = 1 + (this.sizeScale - 1) * 0.5;
+    const base = Math.max(3, Math.round(this.spec.count * this.lengthScale * growth));
+    const n = Math.max(0, base - this.lost);
     while (this.segments.length < n) {
-      this.segments.push(this.segments[this.segments.length - 1].copy());
+      this.segments.push((this.segments[this.segments.length - 1] || this.head.pos).copy());
     }
     while (this.segments.length > n) this.segments.pop();
+  }
+
+  // Morsure de dragon : la queue raccourcit. Renvoie true si le serpent est mort
+  // (il ne reste que la tête).
+  bite() {
+    this.lost += Math.max(2, Math.round(this.spec.count * BITE_FRACTION));
+    this.applyLength();
+    return this.segments.length === 0;
   }
 
   // Appelé quand un fruit est mangé : la crotte sortira après la digestion
   eat() {
     this.digesting.push(0.9);                           // secondes
+    this.sizeGoal = Math.min(MAX_GROWTH_SCALE, this.sizeGoal + GROWTH_PER_FRUIT);
+  }
+
+  // Vitesse et agilité selon la taille : rapide quand il est petit, lent quand il a beaucoup mangé
+  applySpeed() {
+    const f = START_SPEED_BOOST / Math.pow(this.sizeScale, SPEED_EXPONENT);
+    this.head.maxSpeed = this.spec.maxSpeed * f;
+    this.head.maxForce = this.spec.maxForce * f;
+  }
+
+  // Grossit en douceur vers sizeGoal : plus gros => tête et corps plus larges,
+  // vitesse max et force max divisées par la taille => plus lent et moins agile.
+  updateGrowth() {
+    if (Math.abs(this.sizeGoal - this.sizeScale) < 0.001) return;
+    this.sizeScale += (this.sizeGoal - this.sizeScale) * 0.06;
+    const k = this.sizeScale;
+    this.width = this.spec.width * k;
+    this.spacing = this.width * this.spacingRatio;
+    const h = this.head;
+    h.r = this.spec.width * 0.65 * k;
+    h.slowRadius = h.r * 7;
+    this.applySpeed();
+    this.applyLength();
   }
 
   // Renvoie les crottes à éjecter ce frame (depuis le DERNIER point)
@@ -250,14 +270,14 @@ class Snake extends Vehicle {
       this.digesting[i] -= dt;
       if (this.digesting[i] <= 0) {
         this.digesting.splice(i, 1);
-        const last = this.segments[this.segments.length - 1];
+        const last = this.segments.length ? this.segments[this.segments.length - 1] : this.head.pos;
         const prev = this.segments.length > 1
           ? this.segments[this.segments.length - 2]
           : this.head.pos;
         const dir = p5.Vector.sub(last, prev);         // direction de la queue, vers l'arrière
         if (dir.magSq() < 1e-6) dir.set(-1, 0);
         dir.setMag(4);
-        out.push(new Poop(last.x, last.y, dir, { size: Math.max(6, this.width * 0.45) }));
+        out.push(new Fireball(last.x, last.y, dir, { size: Math.max(6, this.width * 0.45) }));
       }
     }
     return out;
@@ -272,6 +292,7 @@ class Snake extends Vehicle {
   // Cible : autour de la souris (chaque serpent sur sa propre orbite) ou, sans souris,
   // une balade en courbe de Lissajous.
   follow(mousePos, t, w, h, bushes = []) {
+    this.updateGrowth();
     let target;
     let lookAt = null;
     if (mousePos) {
@@ -357,4 +378,4 @@ class Snake extends Vehicle {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { Snake, SnakeHead, SNAKE_SPECS, Poop };
+if (typeof module !== 'undefined') module.exports = { Snake, SnakeHead, SNAKE_SPECS };

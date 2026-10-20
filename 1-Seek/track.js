@@ -99,6 +99,129 @@ class Track {
     return bestS;
   }
 
+  // Rayon de la couverture de verre (un peu plus large que l'asphalte + les vibreurs)
+  get coverRadius() {
+    return this.halfWidth + 8;
+  }
+
+  // La couverture est statique : on la dessine UNE fois dans un canvas hors-écran
+  // (refait seulement si la piste ou la taille change). Seuls les reflets bougent.
+  buildCover(W, H, d) {
+    const R = this.coverRadius;
+    const mk = () => {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.ceil(W * d));
+      c.height = Math.max(1, Math.ceil(H * d));
+      const g = c.getContext('2d');
+      g.scale(d, d);
+      g.lineJoin = 'round';
+      g.lineCap = 'round';
+      return { c, g };
+    };
+    const path = new Path2D();
+    this.pts.forEach((p, i) => (i ? path.lineTo(p.x, p.y) : path.moveTo(p.x, p.y)));
+    path.closePath();
+    const shifted = (dx, dy) => {
+      const q = new Path2D();
+      this.pts.forEach((p, i) => (i ? q.lineTo(p.x + dx, p.y + dy) : q.moveTo(p.x + dx, p.y + dy)));
+      q.closePath();
+      return q;
+    };
+
+    const { c, g } = mk();
+
+    // 1. bord de verre + ombre portée au sol (bas-droite)
+    g.save();
+    g.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    g.shadowBlur = 14 * d;
+    g.shadowOffsetX = 7 * d;
+    g.shadowOffsetY = 11 * d;
+    g.strokeStyle = 'rgba(200, 240, 255, 0.55)';
+    g.lineWidth = R * 2 + 8;
+    g.stroke(path);
+    g.restore();
+
+    // 2. intérieur transparent (efface aussi l'ombre sous la couverture)
+    g.globalCompositeOperation = 'destination-out';
+    g.strokeStyle = '#000';
+    g.lineWidth = R * 2;
+    g.stroke(path);
+    g.globalCompositeOperation = 'source-over';
+
+    // 3. teinte légère du verre
+    g.strokeStyle = 'rgba(140, 220, 255, 0.13)';
+    g.lineWidth = R * 2;
+    g.stroke(path);
+
+    // 4. volume : croissant sombre côté bas-droite, croissant clair côté haut-gauche
+    const crescent = (color, dx, dy) => {
+      const t = mk();
+      t.g.strokeStyle = color;
+      t.g.lineWidth = R * 2;
+      t.g.stroke(path);
+      t.g.globalCompositeOperation = 'destination-out';
+      t.g.strokeStyle = '#000';
+      t.g.stroke(shifted(dx, dy));
+      g.drawImage(t.c, 0, 0, W, H);
+    };
+    crescent('rgba(10, 40, 100, 0.32)', -6, -8);
+    crescent('rgba(255, 255, 255, 0.45)', 6, 8);
+
+    // 5. arceaux : une nervure transversale tous les ~70 px
+    g.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    g.lineWidth = 2;
+    for (let s = 0; s < this.total; s += 70) {
+      const p = this.pointAt(s);
+      g.beginPath();
+      g.moveTo(p.x - p.nx * R * 0.98, p.y - p.ny * R * 0.98);
+      g.lineTo(p.x + p.nx * R * 0.98, p.y + p.ny * R * 0.98);
+      g.stroke();
+    }
+
+    // 6. reflets (lumière en haut à gauche) : bande vive + reflet secondaire discret
+    g.save();
+    g.translate(-R * 0.38, -R * 0.5);
+    g.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+    g.lineWidth = R * 0.22;
+    g.stroke(path);
+    g.restore();
+    g.save();
+    g.translate(R * 0.4, R * 0.5);
+    g.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    g.lineWidth = R * 0.1;
+    g.stroke(path);
+    g.restore();
+
+    this._cover = c;
+    this._coverPath = path;
+    this._coverKey = [this.pts, W, H, d];
+  }
+
+  // Couverture transparente en 3D par-dessus la piste (voitures et serpent du circuit dessous)
+  showCover() {
+    const W = width, H = height, d = pixelDensity();
+    const k = this._coverKey;
+    if (!this._cover || k[0] !== this.pts || k[1] !== W || k[2] !== H || k[3] !== d) {
+      this.buildCover(W, H, d);
+    }
+    drawingContext.drawImage(this._cover, 0, 0, W, H);
+
+    // éclat qui glisse le long du reflet principal
+    const R = this.coverRadius;
+    const g = drawingContext;
+    g.save();
+    g.translate(-R * 0.38, -R * 0.5);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+    g.lineWidth = R * 0.12;
+    g.setLineDash([26, 520]);
+    g.lineDashOffset = -frameCount * 4;
+    g.stroke(this._coverPath);
+    g.setLineDash([]);
+    g.restore();
+  }
+
   show() {
     push();
     noFill();
